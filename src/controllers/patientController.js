@@ -139,7 +139,7 @@ exports.migratePatients = async (req, res) => {
 
         const patientData = {
           patient_id: newPatientId,
-          patient_identifier: originalPatientId.toString(),
+          patient_identifier: patientIdentifiers[0]?.identifier,
           created_at: dateFormat(patient.date_created),
           updated_at: patient.date_changed ? dateFormat(patient.date_changed) : null,
           created_by: createdByUuid,
@@ -163,32 +163,29 @@ exports.migratePatients = async (req, res) => {
           death_date: dateFormat(person[0]?.death_datetime),
           death_reason: person[0]?.cause_of_death,
 
-          identifications: patientIdentifiers[0]
-            ? JSON.stringify({
-              identifier: patientIdentifiers[0]?.identifier,
-              date_created: dateFormat(patientIdentifiers[0]?.date_created),
-              date_voided: dateFormat(patientIdentifiers[0]?.date_voided),
-            })
-            : null,
+          identifications: '',
           patient_info: JSON.stringify({
-            original_creator_id: originalCreator,
-            original_changed_by_id: originalChangedBy,
-            birthdate: patientSearch[0]
-              ? dateFormat(patientSearch[0]?.birthdate)
-              : null,
+            bloodGroup: '',
+            maritalStatus: '',
+            religion: '',
+            fatherNameEnglish: '',
+            motherNameEnglish: '',
+            spouseName: '',
+            relativeName: '',
           }),
           address: personAddress[0]
             ? JSON.stringify({
-              address1: personAddress[0]?.address1,
-              city_village: personAddress[0]?.city_village,
-              date_created: dateFormat(personAddress[0]?.date_created),
+              address: '',
+              division: '',
+              district: personAddress[0]?.county_district,
+              upazila: personAddress[0]?.city_village,
+              addressLine: personAddress[0]?.address1,
             })
             : null,
-          contact_info: personAttribute[0]
+          contact_info: patientSearch[0]
             ? JSON.stringify({
-              attribute_type: personAttribute[0]?.attribute_type,
-              value: personAttribute[0]?.value,
-              date_created: dateFormat(personAttribute[0]?.date_created),
+              phone: patientSearch[0]?.phone_no ? patientSearch[0]?.phone_no : '',
+              email: ''
             })
             : null,
 
