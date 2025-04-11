@@ -1,9 +1,8 @@
-const { connectDatabases, mysqlPool } = require("../config/database");
+const { mysqlPool } = require("../config/database");
 const Department = require("../models/Department");
 
 exports.getAllDepartments = async (req, res) => {
     try {
-        await connectDatabases();
 
         const [departments] = await mysqlPool.query("SELECT * FROM department");
 
