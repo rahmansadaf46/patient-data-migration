@@ -17,9 +17,8 @@ exports.migratePatients = async (req, res) => {
     if (!tableCheck.rows[0].exists) {
       console.log("Table registration.patient does not exist. Creating it now...");
       await pgPool.query(`
-        CREATE EXTENSION IF NOT EXISTS pgcrypto; -- Enable pgcrypto for gen_random_uuid()
+        CREATE EXTENSION IF NOT EXISTS pgcrypto;
         CREATE TABLE registration.patient (
-          -- BaseEntity Fields
           uuid UUID DEFAULT gen_random_uuid() PRIMARY KEY NOT NULL,
           created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
           updated_at TIMESTAMP WITH TIME ZONE,
@@ -28,8 +27,6 @@ exports.migratePatients = async (req, res) => {
           status VARCHAR(50),
           reason_to_update TEXT,
           reason_to_delete TEXT,
-
-          -- Patient Fields
           id BIGSERIAL,
           patient_id UUID DEFAULT gen_random_uuid() NOT NULL UNIQUE,
           organization_id UUID,
@@ -48,8 +45,6 @@ exports.migratePatients = async (req, res) => {
           dob TIMESTAMP,
           gender VARCHAR(50),
           patient_category VARCHAR(100),
-
-          -- JSON Columns
           patient_info TEXT,
           identifications TEXT,
           verified BOOLEAN,
@@ -59,8 +54,6 @@ exports.migratePatients = async (req, res) => {
           contact_info TEXT,
           address TEXT,
           relationship TEXT NOT NULL,
-
-          -- Additional Fields
           is_dependant BOOLEAN,
           is_dead BOOLEAN,
           death_date TIMESTAMP,
@@ -93,24 +86,24 @@ exports.migratePatients = async (req, res) => {
         const newPatientId = uuidv4();
         const originalPatientId = patient.patient_id;
 
+        const [patientIdentifiers] = await mysqlDB.query(
+          `SELECT * FROM patient_identifier WHERE patient_id = ?`,
+          [originalPatientId]
+        );
         const existingPatient = await pgPool.query(
-          `SELECT patient_id FROM registration.patient WHERE patient_identifier = $1`,
-          [originalPatientId.toString()]
+          `SELECT patient_identifier FROM registration.patient WHERE patient_identifier = $1`,
+          [patientIdentifiers[0]?.identifier]
         );
 
         if (existingPatient.rows.length > 0) {
           console.log(
-            `Patient with original ID ${originalPatientId} already exists. Skipping...`
+            `Patient with Identifier ${patientIdentifiers[0]?.identifier} already exists. Skipping...`
           );
           skippedPatients.push(originalPatientId);
           continue;
         }
 
         // Fetch related data
-        const [patientIdentifiers] = await mysqlDB.query(
-          `SELECT * FROM patient_identifier WHERE patient_id = ?`,
-          [originalPatientId]
-        );
         const [patientSearch] = await mysqlDB.query(
           `SELECT * FROM patient_search WHERE patient_id = ?`,
           [originalPatientId]
@@ -123,15 +116,38 @@ exports.migratePatients = async (req, res) => {
           `SELECT * FROM person_address WHERE person_id = ?`,
           [originalPatientId]
         );
-        const [personAttribute] = await mysqlDB.query(
-          `SELECT * FROM person_attribute WHERE person_id = ?`,
-          [originalPatientId]
-        );
         const [personName] = await mysqlDB.query(
           `SELECT * FROM person_name WHERE person_id = ?`,
           [originalPatientId]
         );
+        const [familyAttribute] = await mysqlDB.query(
+          `SELECT * FROM family_member_master_table WHERE identifier = ?`,
+          [patientIdentifiers[0]?.identifier]
+        );
+        const [familyMemberAttribute] = await mysqlDB.query(
+          `SELECT * FROM family_member_master_table_details WHERE identifier = ?`,
+          [patientIdentifiers[0]?.identifier]
+        );
 
+        // Fetch email from person_attribute
+        const [emailResult] = await mysqlDB.query(
+          `
+          SELECT pi.identifier, pa.value
+          FROM person_attribute pa
+          LEFT JOIN person_attribute_type pat ON pa.person_attribute_type_id = pat.person_attribute_type_id
+          LEFT JOIN patient_identifier pi ON pa.person_id = pi.patient_id
+          WHERE pat.name = 'Email Address'
+          AND pi.identifier = ?
+          ORDER BY pa.date_created DESC LIMIT 1
+          `,
+          [patientIdentifiers[0]?.identifier]
+        );
+
+        // Validate if the value is an email
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const email = emailResult && emailResult.length > 0 && emailRegex.test(emailResult[0].value)
+          ? emailResult[0].value
+          : "";
         const originalCreator = patient.creator;
         const originalChangedBy = patient.changed_by;
         const createdByUuid = originalCreator ? uuidv4() : null;
@@ -146,9 +162,9 @@ exports.migratePatients = async (req, res) => {
           updated_by: updatedByUuid,
           status: patient.voided ? "VOIDED" : "ACTIVE",
           reason_to_delete: patient.void_reason,
-
-          name: `${personName[0]?.given_name || ""} ${personName[0]?.middle_name || ""
-            } ${personName[0]?.family_name || ""}`.trim(),
+          name: `${personName[0]?.given_name || ""} ${
+            personName[0]?.middle_name || ""
+          } ${personName[0]?.family_name || ""}`.trim(),
           first_name: personName[0]?.given_name,
           middle_name: personName[0]?.middle_name,
           last_name: personName[0]?.family_name,
@@ -157,41 +173,45 @@ exports.migratePatients = async (req, res) => {
             person[0]?.gender === "M"
               ? "MALE"
               : person[0]?.gender === "F"
-                ? "FEMALE"
-                : "OTHER",
+              ? "FEMALE"
+              : "OTHER",
           is_dead: person[0]?.dead || false,
           death_date: dateFormat(person[0]?.death_datetime),
           death_reason: person[0]?.cause_of_death,
-
-          identifications: '',
+          identifications: "",
           patient_info: JSON.stringify({
-            bloodGroup: '',
-            maritalStatus: '',
-            religion: '',
-            fatherNameEnglish: '',
-            motherNameEnglish: '',
-            spouseName: '',
-            relativeName: '',
+            bloodGroup: "",
+            maritalStatus: "",
+            religion: "",
+            fatherNameEnglish: "",
+            motherNameEnglish: "",
+            spouseName: "",
+            relativeName: "",
           }),
           address: personAddress[0]
             ? JSON.stringify({
-              address: '',
-              division: '',
-              district: personAddress[0]?.county_district,
-              upazila: personAddress[0]?.city_village,
-              addressLine: personAddress[0]?.address1,
-            })
+                address: "",
+                division: "",
+                district: personAddress[0]?.county_district,
+                upazila: personAddress[0]?.city_village,
+                addressLine: personAddress[0]?.address1,
+              })
             : null,
-          contact_info: patientSearch[0]
+          contact_info: patientSearch[0] || email
             ? JSON.stringify({
-              phone: patientSearch[0]?.phone_no ? patientSearch[0]?.phone_no : '',
-              email: ''
-            })
+                phone: patientSearch[0]?.phone_no || "",
+                email: email || "",
+              })
             : null,
-
           relationship: "[]",
           organization_id: process.env.ORGANIZATION_ID,
           hospital_id: process.env.HOSPITAL_ID,
+          patientType:
+            familyMemberAttribute.length > 0
+              ? "DEPENDENT"
+              : familyAttribute.length > 0
+              ? "GOVERNMENT"
+              : "NON_GOVERNMENT",
         };
 
         await pgPool.query(
@@ -199,8 +219,8 @@ exports.migratePatients = async (req, res) => {
           INSERT INTO registration.patient (
             patient_id, patient_identifier, created_at, updated_at, created_by, updated_by, status, reason_to_delete,
             name, first_name, middle_name, last_name, dob, gender, is_dead, death_date, death_reason,
-            identifications, patient_info, address, contact_info, relationship, organization_id, hospital_id
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+            identifications, patient_info, address, contact_info, relationship, organization_id, hospital_id, patient_type
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
           `,
           [
             patientData.patient_id,
@@ -227,6 +247,7 @@ exports.migratePatients = async (req, res) => {
             patientData.relationship,
             patientData.organization_id,
             patientData.hospital_id,
+            patientData.patientType,
           ]
         );
 
@@ -244,9 +265,7 @@ exports.migratePatients = async (req, res) => {
     });
   } catch (error) {
     console.error("Error migrating patients:", error);
-    res
-      .status(500)
-      .send({ message: "Error migrating patients", error: error.message });
+    res.status(500).send({ message: "Error migrating patients", error: error.message });
   } finally {
     if (pgPool) {
       await pgPool.end();
