@@ -67,7 +67,7 @@ exports.migratePatients = async (req, res) => {
       console.log("Table registration.patient created successfully.");
     }
 
-    const limit = 500;
+    const limit = 1000;
     let offset = 0;
     let totalMigrated = 0;
     let skippedPatients = [];
@@ -270,5 +270,199 @@ exports.migratePatients = async (req, res) => {
     if (pgPool) {
       await pgPool.end();
     }
+  }
+};
+
+exports.updatePatientRelationships = async (req, res) => {
+  let pgPool;
+  try {
+    pgPool = await connectPostgresDB();
+    // Fetch all patients from PostgreSQL
+    const patientsResult = await pgPool.query(
+      `SELECT patient_id, patient_identifier, gender, patient_type 
+       FROM registration.patient`
+    );
+    const patients = patientsResult.rows;
+
+    // Fetch family data from MySQL
+    const [familyMasters] = await mysqlDB.query(
+      `SELECT * FROM family_member_master_table`
+    );
+    const [familyDetails] = await mysqlDB.query(
+      `SELECT * FROM family_member_master_table_details`
+    );
+
+    let updatedCount = 0;
+
+    // Create a map for quick patient lookup
+    const patientMap = new Map(
+      patients.map(p => [p.patient_identifier, p])
+    );
+    for (const patient of patients) {
+      let relationships = [];
+      let isDependant = false;
+      let needsUpdate = false;
+
+      // Normalize relationship function with "wife" mapping
+      const normalizeRelationship = (relation, patientGender, relatedGender) => {
+        // Handle null/undefined or empty relation
+        if (!relation || relation.trim() === "") {
+          return "OTHER";
+        }
+
+        // Clean the input: remove extra characters, normalize spaces, and convert to uppercase
+        let cleanedRelation = relation
+          .replace(/[^a-zA-Z\s]/g, "") // Remove special characters like '\'
+          .trim()
+          .toUpperCase()
+          .replace(/\s+/g, "_"); // Replace spaces with underscores
+  
+        // Map common variations to standard types
+        switch (cleanedRelation) {
+          case "FATHER_IN_LAW":
+            return relatedGender === "MALE" ? "FATHER_IN_LAW" : "MOTHER_IN_LAW";
+          case "MOTHER_IN_LAW":
+            return relatedGender === "FEMALE" ? "MOTHER_IN_LAW" : "FATHER_IN_LAW";
+          case "FATHER":
+            return patientGender === "MALE" ? "FATHER" : "MOTHER";
+          case "MOTHER":
+            return patientGender === "FEMALE" ? "MOTHER" : "FATHER";
+          case "SON":
+            return patientGender === "MALE" ? "SON" : "DAUGHTER";
+          case "DAUGHTER":
+            return patientGender === "FEMALE" ? "DAUGHTER" : "SON";
+          case "BROTHER":
+            return patientGender === "MALE" ? "BROTHER" : "SISTER";
+          case "SISTER":
+            return patientGender === "FEMALE" ? "SISTER" : "BROTHER";
+          case "SPOUSE":
+          case "WIFE": // Map "wife" to "SPOUSE"
+          case "HUSBAND": // Optionally map "husband" to "SPOUSE" as well
+            return "SPOUSE";
+          case "SON_IN_LAW":
+            return patientGender === "MALE" ? "SON_IN_LAW" : "DAUGHTER_IN_LAW";
+          case "DAUGHTER_IN_LAW":
+            return patientGender === "FEMALE" ? "DAUGHTER_IN_LAW" : "SON_IN_LAW";
+          case "UNCLE":
+            return patientGender === "MALE" ? "UNCLE" : "AUNT";
+          case "AUNT":
+            return patientGender === "FEMALE" ? "AUNT" : "UNCLE";
+          case "NEPHEW":
+            return patientGender === "MALE" ? "NEPHEW" : "NIECE";
+          case "NIECE":
+            return patientGender === "FEMALE" ? "NIECE" : "NEPHEW";
+          case "GRANDFATHER":
+            return patientGender === "MALE" ? "GRANDFATHER" : "GRANDMOTHER";
+          case "GRANDMOTHER":
+            return patientGender === "FEMALE" ? "GRANDMOTHER" : "GRANDFATHER";
+          case "GRANDSON":
+            return patientGender === "MALE" ? "GRANDSON" : "GRANDDAUGHTER";
+          case "GRANDDAUGHTER":
+            return patientGender === "FEMALE" ? "GRANDDAUGHTER" : "GRANDSON";
+          default:
+            return "OTHER";
+        }
+      };
+
+      // Handle GOVERNMENT employees
+      if (patient.patient_type === "GOVERNMENT") {
+        const masterEntry = familyMasters.find(
+          m => m.identifier === patient.patient_identifier
+        );
+        if (masterEntry) {
+          const dependents = familyDetails.filter(
+            d => d.master_id === masterEntry.master_id
+          );
+
+          relationships = dependents
+            .map(dep => {
+              const depPatient = patientMap.get(dep.identifier);
+              if (!depPatient) return null;
+
+              const relation = normalizeRelationship(
+                dep.relationType,
+                depPatient.gender,
+                patient.gender // For in-law relationships
+              );
+
+              return {
+                relationType: relation,
+                patientId: depPatient.patient_id,
+                patientIdentifier: dep.identifier,
+                patientName: `${dep.given_name} ${dep.middle_name || ''} ${dep.family_name}`.trim()
+              };
+            })
+            .filter(r => r !== null);
+
+          if (relationships.length > 0) {
+            needsUpdate = true;
+            isDependant = false;
+          }
+        }
+      }
+
+      // Handle DEPENDENT patients
+      if (patient.patient_type === "DEPENDENT") {
+        const dependentEntry = familyDetails.find(
+          d => d.identifier === patient.patient_identifier
+        );
+        if (dependentEntry) {
+          const master = familyMasters.find(
+            m => m.master_id === dependentEntry.master_id
+          );
+          if (master) {
+            const masterPatient = patientMap.get(master.identifier);
+            if (masterPatient) {
+              const relation = normalizeRelationship(
+                dependentEntry.relationType,
+                patient.gender,
+                masterPatient.gender // For in-law relationships
+              );
+
+              relationships.push({
+                relationType: relation,
+                patientId: masterPatient.patient_id,
+                patientIdentifier: master.identifier,
+                patientName: `${master.given_name} ${master.middle_name || ''} ${master.family_name}`.trim()
+              });
+              needsUpdate = true;
+              isDependant = true;
+            }
+          }
+        }
+      }
+
+      // Update patient if relationships were found
+      if (needsUpdate) {
+        await pgPool.query(
+          `
+          UPDATE registration.patient
+          SET relationship = $1,
+              is_dependant = $2,
+              updated_at = NOW()
+          WHERE patient_id = $3
+          `,
+          [
+            JSON.stringify(relationships),
+            isDependant,
+            patient.patient_id
+          ]
+        );
+        updatedCount++;
+      }
+    }
+
+    res.status(200).send({
+      message: "Patient relationships updated successfully.",
+      totalUpdated: updatedCount,
+    });
+  } catch (error) {
+    console.error("Error updating patient relationships:", error);
+    res.status(500).send({ 
+      message: "Error updating patient relationships", 
+      error: error.message 
+    });
+  } finally {
+    if (pgPool) await pgPool.end();
   }
 };
