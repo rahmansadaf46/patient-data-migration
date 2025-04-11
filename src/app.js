@@ -1,22 +1,24 @@
-const express = require("express");
-const cors = require("cors");
-const { connectDB } = require("./config/db");
-const userRoutes = require("./routers/userRouters");
-const departmentRoutes = require("./routers/departmentRoutes");
-const patientRouters = require("./routers/patientRouters")
-const allPatients = require("./routers/allPatient")
-require("dotenv").config();
-
+const express = require('express');
+const cors = require('cors');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./swagger/swagger');
+const patientRoutes = require('./routes/patientRoutes');
+const errorHandler = require('./middleware/errorHandler');
+const logger = require('./config/logger');
+const config = require('./config/env');
 
 const app = express();
-connectDB();
 
 app.use(cors());
 app.use(express.json());
 
-app.use("/", userRoutes);
-app.use("/api", departmentRoutes);
-app.use("/api", patientRouters)
-app.use("/api", allPatients)
+// API documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// Routes
+app.use('/api', patientRoutes);
+
+// Error handling
+app.use(errorHandler);
 
 module.exports = app;

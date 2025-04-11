@@ -1,15 +1,15 @@
-const { mysqlDB, connectDB } = require("../config/db");
+const { connectDatabases, mysqlPool } = require("../config/database");
 const Department = require("../models/Department");
 
 exports.getAllDepartments = async (req, res) => {
     try {
-        await connectDB();
+        await connectDatabases();
 
-        const [departments] = await mysqlDB.query("SELECT * FROM department");
+        const [departments] = await mysqlPool.query("SELECT * FROM department");
 
         for (const dept of departments) {
-            const [concepts] = await mysqlDB.query("SELECT * FROM department_concept WHERE department_id = ?", [dept.id]);
-            const [wards] = await mysqlDB.query("SELECT * FROM department_ward WHERE department_id = ?", [dept.id]);
+            const [concepts] = await mysqlPool.query("SELECT * FROM department_concept WHERE department_id = ?", [dept.id]);
+            const [wards] = await mysqlPool.query("SELECT * FROM department_ward WHERE department_id = ?", [dept.id]);
 
             // Handle Buffer data for `retired`
             const retired = dept.retired instanceof Buffer ? dept.retired.readUInt8(0) : Number(dept.retired);
