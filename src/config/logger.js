@@ -1,10 +1,13 @@
 const winston = require('winston');
+const moment = require('moment');
 const config = require('./env');
 
 const logger = winston.createLogger({
   level: config.get('env') === 'production' ? 'info' : 'debug',
   format: winston.format.combine(
-    winston.format.timestamp(),
+    winston.format.timestamp({
+      format: () => moment().format('DD-MM-YYYY hh:mm:ss A'), // Custom format: dd-mm-yyyy hh:mm:ss am/pm
+    }),
     winston.format.json()
   ),
   transports: [
