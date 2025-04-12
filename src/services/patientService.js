@@ -3,6 +3,7 @@ const { dateFormat } = require('../utils/dateUtils');
 const { v4: uuidv4 } = require('uuid');
 const logger = require('../config/logger');
 const config = require('../config/env');
+const { getValue } = require('../utils/commonUtils');
 
 class PatientService {
   async createPatientTableIfNotExists() {
@@ -144,29 +145,117 @@ class PatientService {
 
           const [emailResult] = await mysqlPool.query(
             `
-            SELECT pi.identifier, pa.value
+            SELECT pa.person_id, pat.name AS attribute_name, pa.value AS value
             FROM person_attribute pa
             LEFT JOIN person_attribute_type pat ON pa.person_attribute_type_id = pat.person_attribute_type_id
-            LEFT JOIN patient_identifier pi ON pa.person_id = pi.patient_id
             WHERE pat.name = 'Email Address'
-            AND pi.identifier = ?
+            AND pa.person_id = ?
             ORDER BY pa.date_created DESC LIMIT 1
             `,
-            [patientIdentifiers[0].identifier]
+            [originalPatientId]
+          );
+
+          const [nidResult] = await mysqlPool.query(
+            `
+            SELECT pa.person_id, pat.name AS attribute_name, pa.value AS value
+            FROM person_attribute pa
+            LEFT JOIN person_attribute_type pat ON pa.person_attribute_type_id = pat.person_attribute_type_id
+            WHERE pat.name = 'National ID'
+            AND pa.person_id = ?
+            ORDER BY pa.date_created DESC LIMIT 1
+            `,
+            [originalPatientId]
+          );
+
+          const [workplaceResult] = await mysqlPool.query(
+            `
+            SELECT pa.person_id, pat.name AS attribute_name, pa.value AS value
+            FROM person_attribute pa
+            LEFT JOIN person_attribute_type pat ON pa.person_attribute_type_id = pat.person_attribute_type_id
+            WHERE pat.name = 'Work Place'
+            AND pa.person_id = ?
+            ORDER BY pa.date_created DESC LIMIT 1
+            `,
+            [originalPatientId]
+          );
+
+          const [designationResult] = await mysqlPool.query(
+            `
+          SELECT pa.person_id, pat.name AS attribute_name, pa.value AS value
+          FROM person_attribute pa
+          JOIN person_attribute_type pat ON pa.person_attribute_type_id = pat.person_attribute_type_id
+          WHERE pat.name = 'Designation'
+          AND pa.person_id = ?
+          ORDER BY pa.date_created DESC LIMIT 1
+          `,
+            [originalPatientId]
+          );
+
+          const [spouseResult] = await mysqlPool.query(
+            `
+            SELECT
+              fmt.patient_id,
+              fmtd.relationType AS attribute_name,
+              fmtd.gender as gender,
+              CONCAT_WS(' ', fmtd.given_name, fmtd.family_name) AS value
+            FROM
+              family_member_master_table fmt
+            LEFT JOIN
+              family_member_master_table_details fmtd ON fmt.master_id = fmtd.master_id
+            WHERE
+              fmtd.relationType = 'spouse'
+              AND fmt.patient_id = ?
+            `,
+            [originalPatientId]
+          );
+
+          const [fatherResult] = await mysqlPool.query(
+            `
+            SELECT
+              fmt.patient_id,
+              fmtd.relationType AS attribute_name,
+              CONCAT_WS(' ', fmtd.given_name, fmtd.family_name) AS value
+            FROM
+              family_member_master_table fmt
+            LEFT JOIN
+              family_member_master_table_details fmtd ON fmt.master_id = fmtd.master_id
+            WHERE
+              fmtd.relationType = 'father'
+              AND fmt.patient_id = ?
+            `,
+            [originalPatientId]
+          );
+
+          const [motherResult] = await mysqlPool.query(
+            `
+            SELECT
+              fmt.patient_id,
+              fmtd.relationType AS attribute_name,
+              CONCAT_WS(' ', fmtd.given_name, fmtd.family_name) AS value
+            FROM
+              family_member_master_table fmt
+            LEFT JOIN
+              family_member_master_table_details fmtd ON fmt.master_id = fmtd.master_id
+            WHERE
+              fmtd.relationType = 'mother'
+              AND fmt.patient_id = ?
+            `,
+            [originalPatientId]
           );
 
           const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
           const email =
             emailResult &&
-            emailResult.length > 0 &&
-            emailRegex.test(emailResult[0].value)
+              emailResult.length > 0 &&
+              emailRegex.test(emailResult[0].value)
               ? emailResult[0].value
               : '';
-
-          const originalCreator = patient.creator;
-          const originalChangedBy = patient.changed_by;
-          const createdByUuid = originalCreator ? uuidv4() : null;
-          const updatedByUuid = originalChangedBy ? uuidv4() : null;
+          const nid = /^\d{10}$|^\d{13}$|^\d{17}$/.test(nidResult?.[0]?.value) ? nidResult[0].value : '';
+          const workplace = getValue(workplaceResult);
+          const designation = getValue(designationResult);
+          const spouseName = (getValue(spouseResult) && person[0]?.gender !== spouseResult[0]?.gender) ? getValue(spouseResult) : '';
+          const fatherName = getValue(fatherResult)
+          const motherName = getValue(motherResult)
 
           const patientData = {
             patient_id: newPatientId,
@@ -175,13 +264,12 @@ class PatientService {
             updated_at: patient.date_changed
               ? dateFormat(patient.date_changed)
               : null,
-            created_by: createdByUuid,
-            updated_by: updatedByUuid,
+            created_by: null,
+            updated_by: null,
             status: patient.voided ? 'VOIDED' : 'ACTIVE',
             reason_to_delete: patient.void_reason,
-            name: `${personName[0]?.given_name || ''} ${
-              personName[0]?.middle_name || ''
-            } ${personName[0]?.family_name || ''}`.trim(),
+            name: `${personName[0]?.given_name || ''} ${personName[0]?.middle_name || ''
+              } ${personName[0]?.family_name || ''}`.trim(),
             first_name: personName[0]?.given_name,
             middle_name: personName[0]?.middle_name,
             last_name: personName[0]?.family_name,
@@ -190,8 +278,8 @@ class PatientService {
               person[0]?.gender === 'M'
                 ? 'MALE'
                 : person[0]?.gender === 'F'
-                ? 'FEMALE'
-                : 'OTHER',
+                  ? 'FEMALE'
+                  : 'OTHER',
             is_dead: person[0]?.dead || false,
             death_date: dateFormat(person[0]?.death_datetime),
             death_reason: person[0]?.cause_of_death,
@@ -200,25 +288,25 @@ class PatientService {
               bloodGroup: '',
               maritalStatus: '',
               religion: '',
-              fatherNameEnglish: '',
-              motherNameEnglish: '',
-              spouseName: '',
+              fatherNameEnglish: fatherName,
+              motherNameEnglish: motherName,
+              spouseName: spouseName,
               relativeName: '',
             }),
             address: personAddress[0]
               ? JSON.stringify({
-                  address: '',
-                  division: '',
-                  district: personAddress[0]?.county_district,
-                  upazila: personAddress[0]?.city_village,
-                  addressLine: personAddress[0]?.address1,
-                })
+                address: '',
+                division: '',
+                district: personAddress[0]?.county_district,
+                upazila: personAddress[0]?.city_village,
+                addressLine: personAddress[0]?.address1,
+              })
               : null,
             contact_info: patientSearch[0] || email
               ? JSON.stringify({
-                  phone: patientSearch[0]?.phone_no || '',
-                  email: email || '',
-                })
+                phone: patientSearch[0]?.phone_no || '',
+                email: email || '',
+              })
               : null,
             relationship: '[]',
             organization_id: config.get('organization_id'),
@@ -227,8 +315,17 @@ class PatientService {
               familyMemberAttribute.length > 0
                 ? 'DEPENDENT'
                 : familyAttribute.length > 0
-                ? 'GOVERNMENT'
-                : 'NON_GOVERNMENT',
+                  ? 'GOVERNMENT'
+                  : 'NON_GOVERNMENT',
+            nid: nid,
+            workplaces: JSON.stringify({
+              current: {
+                place: familyAttribute.length > 0 ? workplace : '',
+                designation: familyAttribute.length > 0 ? designation : '',
+                rank: '',
+              },
+              previous: [],
+            }),
           };
 
           await client.query(
@@ -236,8 +333,8 @@ class PatientService {
             INSERT INTO registration.patient (
               patient_id, patient_identifier, created_at, updated_at, created_by, updated_by, status, reason_to_delete,
               name, first_name, middle_name, last_name, dob, gender, is_dead, death_date, death_reason,
-              identifications, patient_info, address, contact_info, relationship, organization_id, hospital_id, patient_type
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+              identifications, patient_info, address, contact_info, relationship, organization_id, hospital_id, patient_type, nid, workplaces
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
             `,
             [
               patientData.patient_id,
@@ -265,6 +362,8 @@ class PatientService {
               patientData.organization_id,
               patientData.hospital_id,
               patientData.patientType,
+              patientData.nid,
+              patientData.workplaces
             ]
           );
 
@@ -371,9 +470,8 @@ class PatientService {
                   relationType: relation,
                   patientId: depPatient.patient_id,
                   patientIdentifier: dep.identifier,
-                  patientName: `${dep.given_name} ${
-                    dep.middle_name || ''
-                  } ${dep.family_name}`.trim(),
+                  patientName: `${dep.given_name} ${dep.middle_name || ''
+                    } ${dep.family_name}`.trim(),
                 };
               })
               .filter((r) => r !== null);
@@ -406,9 +504,8 @@ class PatientService {
                   relationType: relation,
                   patientId: masterPatient.patient_id,
                   patientIdentifier: master.identifier,
-                  patientName: `${master.given_name} ${
-                    master.middle_name || ''
-                  } ${master.family_name}`.trim(),
+                  patientName: `${master.given_name} ${master.middle_name || ''
+                    } ${master.family_name}`.trim(),
                 });
                 needsUpdate = true;
                 isDependant = true;

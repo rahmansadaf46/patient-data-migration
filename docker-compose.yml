@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - '6969:6969' # Maps host port 6969 to container port 6969
+      - '8484:8484' # Maps host port 8484 to container port 8484
     env_file:
       - .env
     depends_on:
@@ -22,7 +22,7 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:6969/api-docs']
+      test: ['CMD', 'curl', '-f', 'http://localhost:8484/api-docs']
       interval: 30s
       timeout: 10s
       retries: 3

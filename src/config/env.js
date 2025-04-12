@@ -11,7 +11,7 @@ const config = convict({
   port: {
     doc: 'The port to bind.',
     format: 'port',
-    default: 6969,
+    default: 8484,
     env: 'PORT',
   },
   mongo: {

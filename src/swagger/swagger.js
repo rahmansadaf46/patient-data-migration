@@ -1,16 +1,17 @@
 const swaggerJsdoc = require('swagger-jsdoc');
-
+const config = require('../config/env');
+const port = config.get('port');
 const options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'Patient Migration API',
-      description: 'API for migrating patient data from MySQL to PostgreSQL',
+      title: 'OpenMRS to HSMS Migration API',
+      description: 'API for migrating from MySQL to PostgreSQL | MongoDB to PostgreSQL | PostgreSQL to PostgreSQL',
       version: '1.0.0',
     },
     servers: [
       {
-        url: 'http://localhost:6969/api',
+        url: `http://localhost:${port}/api`,
         description: 'Development server',
       },
     ],

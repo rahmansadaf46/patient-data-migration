@@ -24,7 +24,7 @@ COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/.env ./.env
 
 # Expose port
-EXPOSE 6969
+EXPOSE 8484
 
 # Start application
 CMD ["npm", "start"]
