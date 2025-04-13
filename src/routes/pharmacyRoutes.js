@@ -4,7 +4,7 @@ const PharmacyController = require('../controllers/pharmacyController');
 
 /**
  * @swagger
- * /migrate-pharmacy:
+ * /pharmacy/migrate-pharmacy:
  *   get:
  *     summary: Migrate pharmacy data from MySQL to PostgreSQL
  *     tags: [Pharmacy]
@@ -84,11 +84,11 @@ const PharmacyController = require('../controllers/pharmacyController');
  *                   type: string
  *                   example: Error migrating pharmacy data
  */
-router.get('/migrate-pharmacy', PharmacyController.migratePharmacy);
+router.get('/pharmacy/migrate-pharmacy', PharmacyController.migratePharmacy);
 
 /**
  * @swagger
- * /migrate-formulations:
+ * /pharmacy/migrate-formulations:
  *   get:
  *     summary: Migrate formulations data from MySQL to PostgreSQL
  *     tags: [Pharmacy]
@@ -135,11 +135,11 @@ router.get('/migrate-pharmacy', PharmacyController.migratePharmacy);
  *                   type: string
  *                   example: Error migrating formulations
  */
-router.get('/migrate-formulations', PharmacyController.migrateFormulations);
+router.get('/pharmacy/migrate-formulations', PharmacyController.migrateFormulations);
 
 /**
  * @swagger
- * /migrate-medicines:
+ * /pharmacy/migrate-medicines:
  *   get:
  *     summary: Migrate medicines data from MySQL to PostgreSQL
  *     tags: [Pharmacy]
@@ -198,6 +198,6 @@ router.get('/migrate-formulations', PharmacyController.migrateFormulations);
  *                   type: string
  *                   example: Error migrating medicines
  */
-router.get('/migrate-medicines', PharmacyController.migrateMedicines);
+router.get('/pharmacy/migrate-medicines', PharmacyController.migrateMedicines);
 
 module.exports = router;

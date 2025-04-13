@@ -4,7 +4,7 @@ const InventoryController = require('../controllers/inventoryController');
 
 /**
  * @swagger
- * /migrate-inventory:
+ * /inventory/migrate-inventory:
  *   get:
  *     summary: Migrate inventory data from MySQL to PostgreSQL
  *     tags: [Inventory]
@@ -41,6 +41,6 @@ const InventoryController = require('../controllers/inventoryController');
  *                   type: string
  *                   example: Error migrating inventory
  */
-router.get('/migrate-inventory', InventoryController.migrateInventory);
+router.get('/inventory/migrate-inventory', InventoryController.migrateInventory);
 
 module.exports = router;

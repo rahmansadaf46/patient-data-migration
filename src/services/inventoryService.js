@@ -89,14 +89,44 @@ class InventoryService {
             product_id: productId,
             hospital_id: config.get('hospital_id') || uuidv4(),
             organization_id: config.get('organization_id') || uuidv4(),
-            product_name: item.product_name || 'Unknown',
-            unit_of_measure: item.unit_of_measure && item.unit_of_measure.length < 50 ? item.unit_of_measure : null,
-            product_description: item.unit_of_measure && item.unit_of_measure.length > 50 ? item.unit_of_measure : null,
+            product_name: item.product_name ? item.product_name.trim() : 'Unknown',
+            unit_of_measure: item.unit_of_measure && item.unit_of_measure.length < 50 ? item.unit_of_measure.trim() : null,
+            product_description: item.unit_of_measure && item.unit_of_measure.length > 50 ? item.unit_of_measure.trim() : null,
             category: item.category === 'Consumables' ? 'CONSUMABLE' : 'EQUIPMENT',
             created_at: dateFormat(item.created_at) || new Date(),
             status: 'ACTIVE',
           };
 
+          // Check for duplicate based on product_name, unit_of_measure, product_description, and category
+          const existingProduct = await client.query(
+            `
+            SELECT id FROM inventory.inventory_products 
+            WHERE product_name = $1 
+              AND (unit_of_measure = $2 OR (unit_of_measure IS NULL AND $2 IS NULL))
+              AND (product_description = $3 OR (product_description IS NULL AND $3 IS NULL))
+              AND category = $4
+            `,
+            [
+              inventoryData.product_name,
+              inventoryData.unit_of_measure,
+              inventoryData.product_description,
+              inventoryData.category,
+            ]
+          );
+
+          if (existingProduct.rows.length > 0) {
+            // Skip insertion if duplicate is found
+            skippedItems.push({
+              product_name: inventoryData.product_name,
+              unit_of_measure: inventoryData.unit_of_measure,
+              product_description: inventoryData.product_description,
+              category: inventoryData.category,
+              reason: 'Duplicate product'
+            });
+            continue;
+          }
+
+          // Insert if no duplicate is found
           await client.query(
             `
             INSERT INTO inventory.inventory_products (
@@ -132,7 +162,7 @@ class InventoryService {
       offset += limit;
     }
 
-    logger.info('Inventory migration completed.', { totalMigrated, skippedItemsCount: skippedItems.length });
+    logger.info('Inventory migration completed.', { totalMigrated, skippedItemsCount: skippedItems.length, skippedItems });
     return { totalMigrated, skippedItems };
   }
 }

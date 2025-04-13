@@ -4,10 +4,10 @@ const PatientController = require('../controllers/patientController');
 
 /**
  * @swagger
- * /migrate-patients:
+ * /registration/migrate-patients:
  *   get:
  *     summary: Migrate patient data from MySQL to PostgreSQL
- *     tags: [Patients]
+ *     tags: [Registration]
  *     responses:
  *       200:
  *         description: Migration completed successfully
@@ -41,14 +41,14 @@ const PatientController = require('../controllers/patientController');
  *                   type: string
  *                   example: Error migrating patients
  */
-router.get('/migrate-patients', PatientController.migratePatients);
+router.get('/registration/migrate-patients', PatientController.migratePatients);
 
 /**
  * @swagger
- * /migrate-dependent-patients:
+ * /registration/migrate-dependent-patients:
  *   get:
  *     summary: Update patient relationships in PostgreSQL
- *     tags: [Patients]
+ *     tags: [Registration]
  *     responses:
  *       200:
  *         description: Relationships updated successfully
@@ -74,6 +74,7 @@ router.get('/migrate-patients', PatientController.migratePatients);
  *                   type: string
  *                   example: Error updating patient relationships
  */
-router.get('/migrate-dependent-patients', PatientController.updatePatientRelationships);
+router.get('/registration/migrate-dependent-patients', PatientController.updatePatientRelationships);
+
 
 module.exports = router;
