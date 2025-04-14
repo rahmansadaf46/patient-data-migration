@@ -5,6 +5,7 @@ const swaggerSpec = require('./swagger/swagger');
 const patientRoutes = require('./routes/patientRoutes');
 const inventoryRoutes = require('./routes/inventoryRoutes');
 const pharmacyRoutes = require('./routes/pharmacyRoutes');
+const opdRoutes = require('./routes/opdRoutes');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -19,6 +20,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use('/api', patientRoutes);
 app.use('/api', inventoryRoutes);
 app.use('/api', pharmacyRoutes);
+app.use('/api', opdRoutes);
 
 // Error handling
 app.use(errorHandler);
