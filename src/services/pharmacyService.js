@@ -1,13 +1,25 @@
-const { mysqlPool, postgresPool } = require('../config/database');
-const { dateFormat } = require('../utils/dateUtils');
-const { v4: uuidv4 } = require('uuid');
+const { mysqlPool, pharmacyPostgresPool } = require('../config/database');
 const logger = require('../config/logger');
 const config = require('../config/env');
 
 class PharmacyService {
   async createPharmacyTablesIfNotExists() {
-    const client = await postgresPool.connect();
+    const client = await pharmacyPostgresPool.connect();
     try {
+      // Check if the 'pharmacy' schema exists
+      const schemaCheck = await client.query(
+        `SELECT EXISTS (
+        SELECT FROM pg_namespace 
+        WHERE nspname = 'pharmacy'
+      )`
+      );
+
+      if (!schemaCheck.rows[0].exists) {
+        logger.info('Creating pharmacy schema...');
+        await client.query(`CREATE SCHEMA pharmacy`);
+        logger.info('Schema pharmacy created successfully.');
+      }
+
       logger.info('Checking/creating pharmacy tables...');
 
       // Dosage table
@@ -194,7 +206,7 @@ class PharmacyService {
   // Existing migratePharmacy method (unchanged, assuming it’s already updated with uppercase normalization)
   async migratePharmacy() {
     await this.createPharmacyTablesIfNotExists();
-    const client = await postgresPool.connect();
+    const client = await pharmacyPostgresPool.connect();
     let totalMigrated = {
       dosage: 0,
       categories: 0,
@@ -407,7 +419,7 @@ class PharmacyService {
   // Existing migrateFormulations method (unchanged, assuming it’s already updated)
   async migrateFormulations() {
     await this.createPharmacyTablesIfNotExists();
-    const client = await postgresPool.connect();
+    const client = await pharmacyPostgresPool.connect();
     let totalMigrated = 0;
     const skippedItems = [];
 
@@ -577,7 +589,7 @@ class PharmacyService {
   // New method to migrate medicines
   async migrateMedicines() {
     await this.createPharmacyTablesIfNotExists();
-    const client = await postgresPool.connect();
+    const client = await pharmacyPostgresPool.connect();
     let totalMigrated = 0;
     const skippedItems = [];
 

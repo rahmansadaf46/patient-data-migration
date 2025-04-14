@@ -1,4 +1,4 @@
-const { mysqlPool, postgresPool } = require('../config/database');
+const { mysqlPool, inventoryPostgresPool } = require('../config/database');
 const { dateFormat } = require('../utils/dateUtils');
 const { v4: uuidv4 } = require('uuid');
 const logger = require('../config/logger');
@@ -6,15 +6,30 @@ const config = require('../config/env');
 
 class InventoryService {
   async createInventoryTableIfNotExists() {
-    const client = await postgresPool.connect();
+    const client = await inventoryPostgresPool.connect();
     try {
+      // Check if the 'inventory' schema exists
+      const schemaCheck = await client.query(
+        `SELECT EXISTS (
+          SELECT FROM pg_namespace 
+          WHERE nspname = 'inventory'
+        )`
+      );
+  
+      if (!schemaCheck.rows[0].exists) {
+        logger.info('Creating inventory schema...');
+        await client.query(`CREATE SCHEMA inventory`);
+        logger.info('Schema inventory created successfully.');
+      }
+  
+      // Check if the 'inventory_products' table exists
       const tableCheck = await client.query(
         `SELECT EXISTS (
           SELECT FROM pg_tables 
           WHERE schemaname = 'inventory' AND tablename = 'inventory_products'
         )`
       );
-
+  
       if (!tableCheck.rows[0].exists) {
         logger.info('Creating inventory.inventory_products table...');
         await client.query(`
@@ -78,7 +93,7 @@ class InventoryService {
 
       if (inventoryItems.length === 0) break;
 
-      const client = await postgresPool.connect();
+      const client = await inventoryPostgresPool.connect();
       try {
         await client.query('BEGIN');
 

@@ -1,4 +1,4 @@
-const { mysqlPool, postgresPool } = require('../config/database');
+const { mysqlPool, registrationPostgresPool } = require('../config/database');
 const { dateFormat } = require('../utils/dateUtils');
 const { v4: uuidv4 } = require('uuid');
 const logger = require('../config/logger');
@@ -7,15 +7,30 @@ const { getValue } = require('../utils/commonUtils');
 
 class PatientService {
   async createPatientTableIfNotExists() {
-    const client = await postgresPool.connect();
+    const client = await registrationPostgresPool.connect();
     try {
+      // Check if the 'registration' schema exists
+      const schemaCheck = await client.query(
+        `SELECT EXISTS (
+          SELECT FROM pg_namespace 
+          WHERE nspname = 'registration'
+        )`
+      );
+  
+      if (!schemaCheck.rows[0].exists) {
+        logger.info('Creating registration schema...');
+        await client.query(`CREATE SCHEMA registration`);
+        logger.info('Schema registration created successfully.');
+      }
+  
+      // Check if the 'patient' table exists
       const tableCheck = await client.query(
         `SELECT EXISTS (
           SELECT FROM pg_tables 
           WHERE schemaname = 'registration' AND tablename = 'patient'
         )`
       );
-
+  
       if (!tableCheck.rows[0].exists) {
         logger.info('Creating registration.patient table...');
         await client.query(`
@@ -68,6 +83,9 @@ class PatientService {
         `);
         logger.info('Table registration.patient created successfully.');
       }
+    } catch (error) {
+      logger.error('Error creating patient table', { error: error.message });
+      throw error;
     } finally {
       client.release();
     }
@@ -89,7 +107,7 @@ class PatientService {
 
       if (patients.length === 0) break;
 
-      const client = await postgresPool.connect();
+      const client = await registrationPostgresPool.connect();
       try {
         await client.query('BEGIN');
 
@@ -385,7 +403,7 @@ class PatientService {
   }
 
   async updatePatientRelationships() {
-    const client = await postgresPool.connect();
+    const client = await registrationPostgresPool.connect();
     try {
       await client.query('BEGIN');
 
