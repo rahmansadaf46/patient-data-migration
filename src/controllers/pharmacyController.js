@@ -49,6 +49,38 @@ class PharmacyController {
       next(error);
     }
   }
+
+  async migratePharmacyLocations(req, res, next) {
+    try {
+      logger.info('Starting pharmacy locations migration...');
+      const { totalMigrated, skippedItems } = await PharmacyService.migratePharmacyLocations();
+      logger.info('Pharmacy locations migration completed.', { totalMigrated, skippedItems });
+      res.status(200).json({
+        message: 'Pharmacy locations migration completed.',
+        totalMigrated,
+        skippedItems,
+      });
+    } catch (error) {
+      logger.error('Error migrating pharmacy locations', { error: error.message });
+      next(error);
+    }
+  }
+
+  async migratePharmacyStocks(req, res, next) {
+    try {
+      logger.info('Starting pharmacy stocks migration...');
+      const { totalMigrated, skippedItems } = await PharmacyService.migratePharmacyStocks();
+      logger.info('Pharmacy stocks migration completed.', { totalMigrated, skippedItems });
+      res.status(200).json({
+        message: 'Pharmacy stocks migration completed.',
+        totalMigrated,
+        skippedItems,
+      });
+    } catch (error) {
+      logger.error('Error migrating pharmacy stocks', { error: error.message });
+      next(error);
+    }
+  }
 }
 
 module.exports = new PharmacyController();

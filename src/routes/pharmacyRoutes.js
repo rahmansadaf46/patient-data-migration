@@ -200,4 +200,71 @@ router.get('/pharmacy/migrate-formulations', PharmacyController.migrateFormulati
  */
 router.get('/pharmacy/migrate-medicines', PharmacyController.migrateMedicines);
 
+/**
+ * @swagger
+ * /pharmacy/migrate-pharmacy-locations:
+ *   get:
+ *     summary: Migrate pharmacy locations data
+ *     tags: [Pharmacy]
+ *     responses:
+ *       200:
+ *         description: Migration completed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Pharmacy locations migration completed.
+ *                 totalMigrated:
+ *                   type: integer
+ *                   example: 4
+ *                 skippedItems:
+ *                   type: array
+ *                   items:
+ *                     type: string
+ *                   example: []
+ *       500:
+ *         description: Internal server error
+ */
+router.get('/pharmacy/migrate-pharmacy-locations', PharmacyController.migratePharmacyLocations);
+
+/**
+ * @swagger
+ * /pharmacy/migrate-pharmacy-stocks:
+ *   get:
+ *     summary: Migrate pharmacy stocks data
+ *     tags: [Pharmacy]
+ *     responses:
+ *       200:
+ *         description: Migration completed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Pharmacy stocks migration completed.
+ *                 totalMigrated:
+ *                   type: integer
+ *                   example: 400
+ *                 skippedItems:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       ref_medicine_id:
+ *                         type: string
+ *                       location_id:
+ *                         type: string
+ *                       reason:
+ *                         type: string
+ *                   example: []
+ *       500:
+ *         description: Internal server error
+ */
+router.get('/pharmacy/migrate-pharmacy-stocks', PharmacyController.migratePharmacyStocks);
+
 module.exports = router;

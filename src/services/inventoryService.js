@@ -102,8 +102,8 @@ class InventoryService {
 
           const inventoryData = {
             product_id: productId,
-            hospital_id: config.get('hospital_id') || uuidv4(),
-            organization_id: config.get('organization_id') || uuidv4(),
+            hospital_id: config.get('hospital_id'),
+            organization_id: config.get('organization_id'),
             product_name: item.product_name ? item.product_name.trim() : 'Unknown',
             unit_of_measure: item.unit_of_measure && item.unit_of_measure.length < 50 ? item.unit_of_measure.trim() : null,
             product_description: item.unit_of_measure && item.unit_of_measure.length > 50 ? item.unit_of_measure.trim() : null,
