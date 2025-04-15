@@ -4,7 +4,7 @@ const OpdController = require('../controllers/opdController');
 
 /**
  * @swagger
- * /opd/migrate-prescriptions:
+ * /api/opd/migrate-prescriptions:
  *   get:
  *     summary: Migrate OPD prescriptions from MySQL to PostgreSQL
  *     tags: [OPD]

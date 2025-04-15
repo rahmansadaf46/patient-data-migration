@@ -4,10 +4,17 @@ const PharmacyController = require('../controllers/pharmacyController');
 
 /**
  * @swagger
- * /pharmacy/migrate-pharmacy:
+ * tags:
+ *   name: Pharmacy Migration
+ *   description: API endpoints for migrating pharmacy-related data
+ */
+
+/**
+ * @swagger
+ * /api/pharmacy/migrate-pharmacy:
  *   get:
- *     summary: Migrate pharmacy data from MySQL to PostgreSQL
- *     tags: [Pharmacy]
+ *     summary: Migrate basic pharmacy data (dosage, categories, generic names, formulation types, manufacturers, routes)
+ *     tags: [Pharmacy Migration]
  *     responses:
  *       200:
  *         description: Pharmacy migration completed successfully
@@ -16,24 +23,21 @@ const PharmacyController = require('../controllers/pharmacyController');
  *             schema:
  *               type: object
  *               properties:
- *                 message:
- *                   type: string
- *                   example: Pharmacy migration completed.
  *                 totalMigrated:
  *                   type: object
  *                   properties:
  *                     dosage:
  *                       type: integer
- *                       example: 50
+ *                       example: 10
  *                     categories:
  *                       type: integer
- *                       example: 10
+ *                       example: 5
  *                     genericNames:
  *                       type: integer
- *                       example: 100
+ *                       example: 20
  *                     formulationTypes:
  *                       type: integer
- *                       example: 20
+ *                       example: 8
  *                     manufacturers:
  *                       type: integer
  *                       example: 1
@@ -47,51 +51,45 @@ const PharmacyController = require('../controllers/pharmacyController');
  *                       type: array
  *                       items:
  *                         type: string
- *                       example: []
  *                     categories:
  *                       type: array
  *                       items:
  *                         type: string
- *                       example: []
  *                     genericNames:
  *                       type: array
  *                       items:
  *                         type: string
- *                       example: []
  *                     formulationTypes:
  *                       type: array
  *                       items:
  *                         type: string
- *                       example: []
  *                     manufacturers:
  *                       type: array
  *                       items:
  *                         type: string
- *                       example: []
  *                     routes:
  *                       type: array
  *                       items:
  *                         type: string
- *                       example: []
  *       500:
- *         description: Internal server error
+ *         description: Error during pharmacy migration
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 message:
+ *                 error:
  *                   type: string
- *                   example: Error migrating pharmacy data
+ *                   example: Error during pharmacy migration
  */
 router.get('/pharmacy/migrate-pharmacy', PharmacyController.migratePharmacy);
 
 /**
  * @swagger
- * /pharmacy/migrate-formulations:
+ * /api/pharmacy/migrate-formulations:
  *   get:
- *     summary: Migrate formulations data from MySQL to PostgreSQL
- *     tags: [Pharmacy]
+ *     summary: Migrate formulations data
+ *     tags: [Pharmacy Migration]
  *     responses:
  *       200:
  *         description: Formulations migration completed successfully
@@ -100,12 +98,9 @@ router.get('/pharmacy/migrate-pharmacy', PharmacyController.migratePharmacy);
  *             schema:
  *               type: object
  *               properties:
- *                 message:
- *                   type: string
- *                   example: Formulations migration completed.
  *                 totalMigrated:
  *                   type: integer
- *                   example: 100
+ *                   example: 50
  *                 skippedItems:
  *                   type: array
  *                   items:
@@ -113,36 +108,32 @@ router.get('/pharmacy/migrate-pharmacy', PharmacyController.migratePharmacy);
  *                     properties:
  *                       formulationTypeName:
  *                         type: string
- *                         example: Tablet
+ *                         example: TABLET
  *                       dosageName:
  *                         type: string
  *                         example: 500mg
  *                       reason:
  *                         type: string
- *                         example: Duplicate formulation
- *                   example:
- *                     - formulationTypeName: "Tablet"
- *                       dosageName: "500mg"
- *                       reason: "Duplicate formulation"
+ *                         example: Missing required fields
  *       500:
- *         description: Internal server error
+ *         description: Error during formulations migration
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 message:
+ *                 error:
  *                   type: string
- *                   example: Error migrating formulations
+ *                   example: Error during formulations migration
  */
 router.get('/pharmacy/migrate-formulations', PharmacyController.migrateFormulations);
 
 /**
  * @swagger
- * /pharmacy/migrate-medicines:
+ * /api/pharmacy/migrate-medicines:
  *   get:
- *     summary: Migrate medicines data from MySQL to PostgreSQL
- *     tags: [Pharmacy]
+ *     summary: Migrate medicines data
+ *     tags: [Pharmacy Migration]
  *     responses:
  *       200:
  *         description: Medicines migration completed successfully
@@ -151,12 +142,9 @@ router.get('/pharmacy/migrate-formulations', PharmacyController.migrateFormulati
  *             schema:
  *               type: object
  *               properties:
- *                 message:
- *                   type: string
- *                   example: Medicines migration completed.
  *                 totalMigrated:
  *                   type: integer
- *                   example: 200
+ *                   example: 100
  *                 skippedItems:
  *                   type: array
  *                   items:
@@ -164,13 +152,13 @@ router.get('/pharmacy/migrate-formulations', PharmacyController.migrateFormulati
  *                     properties:
  *                       brandName:
  *                         type: string
- *                         example: Panadol
+ *                         example: Paracetamol
  *                       genericName:
  *                         type: string
  *                         example: Paracetamol
  *                       categoryName:
  *                         type: string
- *                         example: Analgesics
+ *                         example: ANALGESIC
  *                       formulationTypeName:
  *                         type: string
  *                         example: TABLET
@@ -180,73 +168,74 @@ router.get('/pharmacy/migrate-formulations', PharmacyController.migrateFormulati
  *                       reason:
  *                         type: string
  *                         example: Duplicate medicine
- *                   example:
- *                     - brandName: "Panadol"
- *                       genericName: "Paracetamol"
- *                       categoryName: "Analgesics"
- *                       formulationTypeName: "TABLET"
- *                       dosageName: "500mg"
- *                       reason: "Duplicate medicine"
  *       500:
- *         description: Internal server error
+ *         description: Error during medicines migration
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 message:
+ *                 error:
  *                   type: string
- *                   example: Error migrating medicines
+ *                   example: Error during medicines migration
  */
 router.get('/pharmacy/migrate-medicines', PharmacyController.migrateMedicines);
 
 /**
  * @swagger
- * /pharmacy/migrate-pharmacy-locations:
+ * /api/pharmacy/migrate-pharmacy-locations:
  *   get:
  *     summary: Migrate pharmacy locations data
- *     tags: [Pharmacy]
+ *     tags: [Pharmacy Migration]
  *     responses:
  *       200:
- *         description: Migration completed successfully
+ *         description: Pharmacy locations migration completed successfully
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 message:
- *                   type: string
- *                   example: Pharmacy locations migration completed.
  *                 totalMigrated:
  *                   type: integer
  *                   example: 4
  *                 skippedItems:
  *                   type: array
  *                   items:
- *                     type: string
- *                   example: []
+ *                     type: object
+ *                     properties:
+ *                       name:
+ *                         type: string
+ *                         example: SKH-warehouse
+ *                       reason:
+ *                         type: string
+ *                         example: Already exists
  *       500:
- *         description: Internal server error
- */
-router.get('/pharmacy/migrate-pharmacy-locations', PharmacyController.migratePharmacyLocations);
-
-/**
- * @swagger
- * /pharmacy/migrate-pharmacy-stocks:
- *   get:
- *     summary: Migrate pharmacy stocks data
- *     tags: [Pharmacy]
- *     responses:
- *       200:
- *         description: Migration completed successfully
+ *         description: Error during pharmacy locations migration
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 message:
+ *                 error:
  *                   type: string
- *                   example: Pharmacy stocks migration completed.
+ *                   example: Error during pharmacy locations migration
+ */
+router.get('/pharmacy/migrate-pharmacy-locations', PharmacyController.migratePharmacyLocations);
+
+/**
+ * @swagger
+ * /api/pharmacy/migrate-pharmacy-stocks:
+ *   get:
+ *     summary: Migrate pharmacy stocks data
+ *     tags: [Pharmacy Migration]
+ *     responses:
+ *       200:
+ *         description: Pharmacy stocks migration completed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
  *                 totalMigrated:
  *                   type: integer
  *                   example: 400
@@ -257,13 +246,26 @@ router.get('/pharmacy/migrate-pharmacy-locations', PharmacyController.migratePha
  *                     properties:
  *                       ref_medicine_id:
  *                         type: string
- *                       location_id:
+ *                         example: "550e8400-e29b-41d4-a716-446655440000"
+ *                       name:
  *                         type: string
+ *                         example: Paracetamol
+ *                       location_id:
+ *                         type: integer
+ *                         example: 1
  *                       reason:
  *                         type: string
- *                   example: []
+ *                         example: Duplicate stock entry
  *       500:
- *         description: Internal server error
+ *         description: Error during pharmacy stocks migration
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: Error during pharmacy stocks migration
  */
 router.get('/pharmacy/migrate-pharmacy-stocks', PharmacyController.migratePharmacyStocks);
 

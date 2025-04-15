@@ -942,86 +942,144 @@ class PharmacyService {
     const client = await pharmacyPostgresPool.connect();
     let totalMigrated = 0;
     const skippedItems = [];
-
+  
     try {
       await client.query('BEGIN');
-
-      // Insert SKH-warehouse (WAREHOUSE)
-      let warehouseResult = await client.query(
+  
+      // Check if SKH-warehouse exists
+      let warehouseId;
+      const warehouseCheck = await client.query(
         `
-        INSERT INTO pharmacy.pharmacy_locations (
-          organization_id, hospital_id, name, location_type, parent_location_id, status, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
-        RETURNING id
+        SELECT id FROM pharmacy.pharmacy_locations 
+        WHERE name = $1
         `,
-        [
-          config.get('organization_id'),
-          config.get('hospital_id'),
-          'SKH-warehouse',
-          'WAREHOUSE',
-          0,
-          'ACTIVE'
-        ]
+        ['SKH-warehouse']
       );
-      const warehouseId = warehouseResult.rows[0].id;
-      totalMigrated++;
-
-      // Insert SKH-mainstore (CENTRAL_STORE) with parent as SKH-warehouse
-      let mainstoreResult = await client.query(
+  
+      if (warehouseCheck.rows.length > 0) {
+        // Location already exists, use its ID
+        warehouseId = warehouseCheck.rows[0].id;
+        skippedItems.push({ name: 'SKH-warehouse', reason: 'Already exists' });
+      } else {
+        // Insert SKH-warehouse (WAREHOUSE)
+        const warehouseResult = await client.query(
+          `
+          INSERT INTO pharmacy.pharmacy_locations (
+            organization_id, hospital_id, name, location_type, parent_location_id, status, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+          RETURNING id
+          `,
+          [
+            config.get('organization_id'),
+            config.get('hospital_id'),
+            'SKH-warehouse',
+            'WAREHOUSE',
+            0,
+            'ACTIVE'
+          ]
+        );
+        warehouseId = warehouseResult.rows[0].id;
+        totalMigrated++;
+      }
+  
+      // Check if SKH-mainstore exists
+      let mainstoreId;
+      const mainstoreCheck = await client.query(
         `
-        INSERT INTO pharmacy.pharmacy_locations (
-          organization_id, hospital_id, name, location_type, parent_location_id, status, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
-        RETURNING id
+        SELECT id FROM pharmacy.pharmacy_locations 
+        WHERE name = $1
         `,
-        [
-          config.get('organization_id'),
-          config.get('hospital_id'),
-          'SKH-mainstore',
-          'CENTRAL_STORE',
-          warehouseId,
-          'ACTIVE'
-        ]
+        ['SKH-mainstore']
       );
-      const mainstoreId = mainstoreResult.rows[0].id;
-      totalMigrated++;
-
-      // Insert Pharmacy Indoor (SUB_STORE) with parent as SKH-mainstore
-      await client.query(
+  
+      if (mainstoreCheck.rows.length > 0) {
+        // Location already exists, use its ID
+        mainstoreId = mainstoreCheck.rows[0].id;
+        skippedItems.push({ name: 'SKH-mainstore', reason: 'Already exists' });
+      } else {
+        // Insert SKH-mainstore (CENTRAL_STORE) with parent as SKH-warehouse
+        const mainstoreResult = await client.query(
+          `
+          INSERT INTO pharmacy.pharmacy_locations (
+            organization_id, hospital_id, name, location_type, parent_location_id, status, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+          RETURNING id
+          `,
+          [
+            config.get('organization_id'),
+            config.get('hospital_id'),
+            'SKH-mainstore',
+            'CENTRAL_STORE',
+            warehouseId,
+            'ACTIVE'
+          ]
+        );
+        mainstoreId = mainstoreResult.rows[0].id;
+        totalMigrated++;
+      }
+  
+      // Check if Pharmacy Indoor exists
+      const indoorCheck = await client.query(
         `
-        INSERT INTO pharmacy.pharmacy_locations (
-          organization_id, hospital_id, name, location_type, parent_location_id, status, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        SELECT id FROM pharmacy.pharmacy_locations 
+        WHERE name = $1
         `,
-        [
-          config.get('organization_id'),
-          config.get('hospital_id'),
-          'Pharmacy Indoor',
-          'SUB_STORE',
-          mainstoreId,
-          'ACTIVE'
-        ]
+        ['Pharmacy Indoor']
       );
-      totalMigrated++;
-
-      // Insert Pharmacy Outdoor (SUB_STORE) with parent as SKH-mainstore
-      await client.query(
+  
+      if (indoorCheck.rows.length === 0) {
+        // Insert Pharmacy Indoor (SUB_STORE) with parent as SKH-mainstore
+        await client.query(
+          `
+          INSERT INTO pharmacy.pharmacy_locations (
+            organization_id, hospital_id, name, location_type, parent_location_id, status, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+          `,
+          [
+            config.get('organization_id'),
+            config.get('hospital_id'),
+            'Pharmacy Indoor',
+            'SUB_STORE',
+            mainstoreId,
+            'ACTIVE'
+          ]
+        );
+        totalMigrated++;
+      } else {
+        skippedItems.push({ name: 'Pharmacy Indoor', reason: 'Already exists' });
+      }
+  
+      // Check if Pharmacy Outdoor exists
+      const outdoorCheck = await client.query(
         `
-        INSERT INTO pharmacy.pharmacy_locations (
-          organization_id, hospital_id, name, location_type, parent_location_id, status, created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        SELECT id FROM pharmacy.pharmacy_locations 
+        WHERE name = $1
         `,
-        [
-          config.get('organization_id'),
-          config.get('hospital_id'),
-          'Pharmacy Outdoor',
-          'SUB_STORE',
-          mainstoreId,
-          'ACTIVE'
-        ]
+        ['Pharmacy Outdoor']
       );
-      totalMigrated++;
-
+  
+      if (outdoorCheck.rows.length === 0) {
+        // Insert Pharmacy Outdoor (SUB_STORE) with parent as SKH-mainstore
+        await client.query(
+          `
+          INSERT INTO pharmacy.pharmacy_locations (
+            organization_id, hospital_id, name, location_type, parent_location_id, status, created_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+          `,
+          [
+            config.get('organization_id'),
+            config.get('hospital_id'),
+            'Pharmacy Outdoor',
+            'SUB_STORE',
+            mainstoreId,
+            'ACTIVE'
+          ]
+        );
+        totalMigrated++;
+      } else {
+        skippedItems.push({ name: 'Pharmacy Outdoor', reason: 'Already exists' });
+      }
+  
       await client.query('COMMIT');
       logger.info('Pharmacy locations migration completed.', { totalMigrated, skippedItems });
       return { totalMigrated, skippedItems };
@@ -1039,16 +1097,6 @@ class PharmacyService {
     const client = await pharmacyPostgresPool.connect();
     let totalMigrated = 0;
     const skippedItems = [];
-  
-    // Function to generate a random 5-character code (uppercase letters and numbers)
-    const generateRandomCode = () => {
-      const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-      let result = '';
-      for (let i = 0; i < 5; i++) {
-        result += characters.charAt(Math.floor(Math.random() * characters.length));
-      }
-      return result;
-    };
   
     try {
       await client.query('BEGIN');
@@ -1097,16 +1145,18 @@ class PharmacyService {
           continue;
         }
   
-        // Generate SKU prefix (first 5 characters of the category name, uppercase)
-        const skuPrefix = sku.substring(0, 5).toUpperCase();
+        // Generate SKU prefix:
+        // 1. Remove spaces and special characters, keep only alphanumeric characters
+        // 2. Take first 5 characters (or fewer if shorter), uppercase, no padding
+        const trimmedCategoryName = sku.trim();
+        const cleanCategoryName = trimmedCategoryName.replace(/[^a-zA-Z0-9]/g, ''); // Remove non-alphanumeric characters
+        const skuPrefix = cleanCategoryName.length >= 5 
+          ? cleanCategoryName.substring(0, 5).toUpperCase()
+          : cleanCategoryName.toUpperCase(); // Take only available characters if less than 5
   
         // Create stock entry for each location
         for (const location of locations) {
           const { id: location_id } = location;
-  
-          // Generate a unique SKU for each stock entry
-          const randomCode = generateRandomCode();
-          const formattedSku = `${skuPrefix}-${randomCode}`; // e.g., "VITAM-D8C78"
   
           // Check for existing stock entry to avoid duplicates (based on unique constraint location_id, ref_medicine_id)
           const existingStock = await client.query(
@@ -1129,6 +1179,10 @@ class PharmacyService {
           // Generate a unique ID for the stock entry
           const stockId = uuidv4();
   
+          // Generate random code from the first 5 characters of stockId, uppercase
+          const randomCode = stockId.substring(0, 5).toUpperCase();
+          const formattedSku = `${skuPrefix}-${randomCode}`; // e.g., "ORAL-001A4"
+  
           // Insert stock entry with the generated id
           await client.query(
             `
@@ -1139,7 +1193,7 @@ class PharmacyService {
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, NOW())
             `,
             [
-              stockId, // Use the generated ID
+              stockId,
               config.get('organization_id'),
               config.get('hospital_id'),
               location_id,

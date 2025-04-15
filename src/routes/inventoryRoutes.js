@@ -4,7 +4,7 @@ const InventoryController = require('../controllers/inventoryController');
 
 /**
  * @swagger
- * /inventory/migrate-inventory:
+ * /api/inventory/migrate-inventory:
  *   get:
  *     summary: Migrate inventory data from MySQL to PostgreSQL
  *     tags: [Inventory]

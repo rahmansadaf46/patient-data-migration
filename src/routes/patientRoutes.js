@@ -4,7 +4,7 @@ const PatientController = require('../controllers/patientController');
 
 /**
  * @swagger
- * /registration/migrate-patients:
+ * /api/registration/migrate-patients:
  *   get:
  *     summary: Migrate patient data from MySQL to PostgreSQL
  *     tags: [Registration]
@@ -45,7 +45,7 @@ router.get('/registration/migrate-patients', PatientController.migratePatients);
 
 /**
  * @swagger
- * /registration/migrate-dependent-patients:
+ * /api/registration/migrate-dependent-patients:
  *   get:
  *     summary: Update patient relationships in PostgreSQL
  *     tags: [Registration]
