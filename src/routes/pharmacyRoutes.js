@@ -2,19 +2,13 @@ const express = require('express');
 const router = express.Router();
 const PharmacyController = require('../controllers/pharmacyController');
 
-/**
- * @swagger
- * tags:
- *   name: Pharmacy Migration
- *   description: API endpoints for migrating pharmacy-related data
- */
 
 /**
  * @swagger
  * /api/pharmacy/migrate-pharmacy:
  *   get:
  *     summary: Migrate basic pharmacy data (dosage, categories, generic names, formulation types, manufacturers, routes)
- *     tags: [Pharmacy Migration]
+ *     tags: [Pharmacy]
  *     responses:
  *       200:
  *         description: Pharmacy migration completed successfully
@@ -89,7 +83,7 @@ router.get('/pharmacy/migrate-pharmacy', PharmacyController.migratePharmacy);
  * /api/pharmacy/migrate-formulations:
  *   get:
  *     summary: Migrate formulations data
- *     tags: [Pharmacy Migration]
+ *     tags: [Pharmacy]
  *     responses:
  *       200:
  *         description: Formulations migration completed successfully
@@ -133,7 +127,7 @@ router.get('/pharmacy/migrate-formulations', PharmacyController.migrateFormulati
  * /api/pharmacy/migrate-medicines:
  *   get:
  *     summary: Migrate medicines data
- *     tags: [Pharmacy Migration]
+ *     tags: [Pharmacy]
  *     responses:
  *       200:
  *         description: Medicines migration completed successfully
@@ -186,7 +180,7 @@ router.get('/pharmacy/migrate-medicines', PharmacyController.migrateMedicines);
  * /api/pharmacy/migrate-pharmacy-locations:
  *   get:
  *     summary: Migrate pharmacy locations data
- *     tags: [Pharmacy Migration]
+ *     tags: [Pharmacy]
  *     responses:
  *       200:
  *         description: Pharmacy locations migration completed successfully
@@ -227,7 +221,7 @@ router.get('/pharmacy/migrate-pharmacy-locations', PharmacyController.migratePha
  * /api/pharmacy/migrate-pharmacy-stocks:
  *   get:
  *     summary: Migrate pharmacy stocks data
- *     tags: [Pharmacy Migration]
+ *     tags: [Pharmacy]
  *     responses:
  *       200:
  *         description: Pharmacy stocks migration completed successfully

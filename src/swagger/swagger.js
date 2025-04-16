@@ -15,6 +15,24 @@ const options = {
         description: 'Development server',
       },
     ],
+    tags: [
+      {
+        name: 'Inventory',
+        description: 'API endpoints for inventory-related operations',
+      },
+      {
+        name: 'Pharmacy',
+        description: 'API endpoints for pharmacy-related operations',
+      },
+      {
+        name: 'Registration',
+        description: 'API endpoints for registration-related operations',
+      },
+      {
+        name: 'OPD',
+        description: 'API endpoints for OPD-related operations',
+      },
+    ],
   },
   apis: [
     './src/routes/*.js', // Scan route files
