@@ -298,7 +298,7 @@ class PatientService {
                 : person[0]?.gender === 'F'
                   ? 'FEMALE'
                   : 'OTHER',
-            is_dead: person[0]?.dead || false,
+            is_dead: false,
             death_date: dateFormat(person[0]?.death_datetime),
             death_reason: person[0]?.cause_of_death,
             identifications: '',
@@ -331,7 +331,7 @@ class PatientService {
             hospital_id: config.get('hospital_id'),
             patientType:
               familyMemberAttribute.length > 0
-                ? 'DEPENDENT'
+                ? 'DEPENDANT'
                 : familyAttribute.length > 0
                   ? 'GOVERNMENT'
                   : 'NON_GOVERNMENT',
@@ -346,13 +346,15 @@ class PatientService {
             }),
           };
 
+          const isDependent = familyMemberAttribute.length > 0 ? true : false;
+
           await client.query(
             `
             INSERT INTO registration.patient (
               patient_id, patient_identifier, created_at, updated_at, created_by, updated_by, status, reason_to_delete,
               name, first_name, middle_name, last_name, dob, gender, is_dead, death_date, death_reason,
-              identifications, patient_info, address, contact_info, relationship, organization_id, hospital_id, patient_type, nid, workplaces
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+              identifications, patient_info, address, contact_info, relationship, organization_id, hospital_id, patient_type, nid, workplaces, verified, is_dependant, issue_date
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
             `,
             [
               patientData.patient_id,
@@ -381,7 +383,10 @@ class PatientService {
               patientData.hospital_id,
               patientData.patientType,
               patientData.nid,
-              patientData.workplaces
+              patientData.workplaces,
+              false,
+              isDependent,
+              patientData.created_at
             ]
           );
 
@@ -501,7 +506,7 @@ class PatientService {
           }
         }
 
-        if (patient.patient_type === 'DEPENDENT') {
+        if (patient.patient_type === 'DEPENDANT') {
           const dependentEntry = familyDetails.find(
             (d) => d.identifier === patient.patient_identifier
           );
