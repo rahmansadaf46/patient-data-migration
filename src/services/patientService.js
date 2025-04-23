@@ -16,13 +16,13 @@ class PatientService {
           WHERE nspname = 'registration'
         )`
       );
-  
+
       if (!schemaCheck.rows[0].exists) {
         logger.info('Creating registration schema...');
         await client.query(`CREATE SCHEMA registration`);
         logger.info('Schema registration created successfully.');
       }
-  
+
       // Check if the 'patient' table exists
       const tableCheck = await client.query(
         `SELECT EXISTS (
@@ -30,7 +30,7 @@ class PatientService {
           WHERE schemaname = 'registration' AND tablename = 'patient'
         )`
       );
-  
+
       if (!tableCheck.rows[0].exists) {
         logger.info('Creating registration.patient table...');
         await client.query(`
@@ -44,7 +44,7 @@ class PatientService {
             status VARCHAR(50),
             reason_to_update TEXT,
             reason_to_delete TEXT,
-            id BIGSERIAL,
+            id BIGINT,
             patient_id UUID DEFAULT gen_random_uuid() NOT NULL UNIQUE,
             organization_id UUID,
             hospital_id UUID,
@@ -59,6 +59,7 @@ class PatientService {
             health_id VARCHAR(255),
             birth_place VARCHAR(255),
             image_path VARCHAR(255),
+            document_path VARCHAR(255),
             dob TIMESTAMP,
             gender VARCHAR(50),
             patient_category VARCHAR(100),
@@ -66,6 +67,7 @@ class PatientService {
             identifications TEXT,
             verified BOOLEAN,
             verification_process VARCHAR(255),
+            verify_id VARCHAR(255),
             verified_by UUID,
             workplaces TEXT,
             contact_info TEXT,
@@ -93,49 +95,88 @@ class PatientService {
 
   async migratePatients() {
     await this.createPatientTableIfNotExists();
-
+  
     const limit = 1000;
     let offset = 0;
     let totalMigrated = 0;
     const skippedPatients = [];
-
+  
+    // Fetch the current maximum id to start incrementing from there
+    const client = await registrationPostgresPool.connect();
+    let maxIdResult;
+    try {
+      // Check for invalid id values in the table
+      const invalidIds = await client.query(
+        `SELECT id FROM registration.patient WHERE id::text ~ '^[0-9]+$' AND LENGTH(id::text) > 19`
+      );
+      if (invalidIds.rows.length > 0) {
+        logger.warn('Found invalid id values in registration.patient. Cleaning up...');
+        // Delete rows with invalid ids (or update them based on your needs)
+        await client.query(
+          `DELETE FROM registration.patient WHERE id::text ~ '^[0-9]+$' AND LENGTH(id::text) > 19`
+        );
+        logger.info('Invalid id values removed from registration.patient.');
+      }
+  
+      maxIdResult = await client.query(
+        `SELECT COALESCE(MAX(id), 0) as max_id FROM registration.patient`
+      );
+    } finally {
+      client.release();
+    }
+  
+    // Ensure currentId is a number
+    let currentId = Number(maxIdResult.rows[0].max_id);
+    if (isNaN(currentId)) {
+      logger.error('Failed to convert max_id to a number. Defaulting to 0.', { max_id: maxIdResult.rows[0].max_id });
+      currentId = 0;
+    }
+    logger.info('Starting currentId:', { currentId });
+  
     while (true) {
       const [patients] = await mysqlPool.query(
         `SELECT * FROM patient LIMIT ? OFFSET ?`,
         [limit, offset]
       );
-
+  
       if (patients.length === 0) break;
-
+  
       const client = await registrationPostgresPool.connect();
       try {
         await client.query('BEGIN');
-
+  
         for (const patient of patients) {
           const newPatientId = uuidv4();
           const originalPatientId = patient.patient_id;
-
+  
           const [patientIdentifiers] = await mysqlPool.query(
             `SELECT * FROM patient_identifier WHERE patient_id = ?`,
             [originalPatientId]
           );
-
+  
           if (!patientIdentifiers[0]?.identifier) {
             skippedPatients.push(originalPatientId);
             continue;
           }
-
+  
+          // Sanitize patient_identifier
+          let patientIdentifier = patientIdentifiers[0].identifier;
+          if (/^\d+$/.test(patientIdentifier) && patientIdentifier.length > 19) {
+            logger.warn(`Sanitizing patient_identifier ${patientIdentifier} for patient ${originalPatientId}.`);
+            patientIdentifier = `SANITIZED_${originalPatientId}`;
+          }
+  
           const existingPatient = await client.query(
             `SELECT patient_identifier FROM registration.patient WHERE patient_identifier = $1`,
-            [patientIdentifiers[0].identifier]
+            [patientIdentifier]
           );
-
+  
           if (existingPatient.rows.length > 0) {
-            logger.warn(`Patient with identifier ${patientIdentifiers[0].identifier} already exists. Skipping...`);
+            logger.warn(`Patient with identifier ${patientIdentifier} already exists. Skipping...`);
             skippedPatients.push(originalPatientId);
             continue;
           }
-
+  
           const [patientSearch] = await mysqlPool.query(
             `SELECT * FROM patient_search WHERE patient_id = ?`,
             [originalPatientId]
@@ -154,13 +195,13 @@ class PatientService {
           );
           const [familyAttribute] = await mysqlPool.query(
             `SELECT * FROM family_member_master_table WHERE identifier = ?`,
-            [patientIdentifiers[0].identifier]
+            [patientIdentifier]
           );
           const [familyMemberAttribute] = await mysqlPool.query(
             `SELECT * FROM family_member_master_table_details WHERE identifier = ?`,
-            [patientIdentifiers[0].identifier]
+            [patientIdentifier]
           );
-
+  
           const [emailResult] = await mysqlPool.query(
             `
             SELECT pa.person_id, pat.name AS attribute_name, pa.value AS value
@@ -172,7 +213,7 @@ class PatientService {
             `,
             [originalPatientId]
           );
-
+  
           const [nidResult] = await mysqlPool.query(
             `
             SELECT pa.person_id, pat.name AS attribute_name, pa.value AS value
@@ -184,7 +225,7 @@ class PatientService {
             `,
             [originalPatientId]
           );
-
+  
           const [workplaceResult] = await mysqlPool.query(
             `
             SELECT pa.person_id, pat.name AS attribute_name, pa.value AS value
@@ -196,19 +237,19 @@ class PatientService {
             `,
             [originalPatientId]
           );
-
+  
           const [designationResult] = await mysqlPool.query(
             `
-          SELECT pa.person_id, pat.name AS attribute_name, pa.value AS value
-          FROM person_attribute pa
-          JOIN person_attribute_type pat ON pa.person_attribute_type_id = pat.person_attribute_type_id
-          WHERE pat.name = 'Designation'
-          AND pa.person_id = ?
-          ORDER BY pa.date_created DESC LIMIT 1
-          `,
+            SELECT pa.person_id, pat.name AS attribute_name, pa.value AS value
+            FROM person_attribute pa
+            JOIN person_attribute_type pat ON pa.person_attribute_type_id = pat.person_attribute_type_id
+            WHERE pat.name = 'Designation'
+            AND pa.person_id = ?
+            ORDER BY pa.date_created DESC LIMIT 1
+            `,
             [originalPatientId]
           );
-
+  
           const [spouseResult] = await mysqlPool.query(
             `
             SELECT
@@ -226,7 +267,7 @@ class PatientService {
             `,
             [originalPatientId]
           );
-
+  
           const [fatherResult] = await mysqlPool.query(
             `
             SELECT
@@ -243,7 +284,7 @@ class PatientService {
             `,
             [originalPatientId]
           );
-
+  
           const [motherResult] = await mysqlPool.query(
             `
             SELECT
@@ -260,7 +301,7 @@ class PatientService {
             `,
             [originalPatientId]
           );
-
+  
           const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
           const email =
             emailResult &&
@@ -268,16 +309,16 @@ class PatientService {
               emailRegex.test(emailResult[0].value)
               ? emailResult[0].value
               : '';
-          const nid = /^\d{10}$|^\d{13}$|^\d{17}$/.test(nidResult?.[0]?.value) ? nidResult[0].value : '';
+          const nid = nidResult?.[0]?.value && /^(?:\d{10}|\d{13}|\d{17})$/.test(nidResult[0].value) ? nidResult[0].value : '';
           const workplace = getValue(workplaceResult);
           const designation = getValue(designationResult);
           const spouseName = (getValue(spouseResult) && person[0]?.gender !== spouseResult[0]?.gender) ? getValue(spouseResult) : '';
-          const fatherName = getValue(fatherResult)
-          const motherName = getValue(motherResult)
-
+          const fatherName = getValue(fatherResult);
+          const motherName = getValue(motherResult);
+  
           const patientData = {
             patient_id: newPatientId,
-            patient_identifier: patientIdentifiers[0].identifier,
+            patient_identifier: patientIdentifier,
             created_at: dateFormat(patient.date_created),
             updated_at: patient.date_changed
               ? dateFormat(patient.date_changed)
@@ -345,18 +386,23 @@ class PatientService {
               previous: [],
             }),
           };
-
+  
           const isDependent = familyMemberAttribute.length > 0 ? true : false;
-
+  
+          // Increment the id for the current patient
+          currentId += 1;
+          logger.info('Inserting patient with id:', { currentId, type: typeof currentId });
+  
           await client.query(
             `
             INSERT INTO registration.patient (
-              patient_id, patient_identifier, created_at, updated_at, created_by, updated_by, status, reason_to_delete,
+              id, patient_id, patient_identifier, created_at, updated_at, created_by, updated_by, status, reason_to_delete,
               name, first_name, middle_name, last_name, dob, gender, is_dead, death_date, death_reason,
               identifications, patient_info, address, contact_info, relationship, organization_id, hospital_id, patient_type, nid, workplaces, verified, is_dependant, issue_date
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
             `,
             [
+              currentId,
               patientData.patient_id,
               patientData.patient_identifier,
               patientData.created_at,
@@ -389,10 +435,10 @@ class PatientService {
               patientData.created_at
             ]
           );
-
+  
           totalMigrated++;
         }
-
+  
         await client.query('COMMIT');
       } catch (error) {
         await client.query('ROLLBACK');
@@ -400,10 +446,10 @@ class PatientService {
       } finally {
         client.release();
       }
-
+  
       offset += limit;
     }
-
+  
     return { totalMigrated, skippedPatients };
   }
 
