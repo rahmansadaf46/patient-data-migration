@@ -101,38 +101,6 @@ class PatientService {
     let totalMigrated = 0;
     const skippedPatients = [];
   
-    // Fetch the current maximum id to start incrementing from there
-    const client = await registrationPostgresPool.connect();
-    let maxIdResult;
-    try {
-      // Check for invalid id values in the table
-      const invalidIds = await client.query(
-        `SELECT id FROM registration.patient WHERE id::text ~ '^[0-9]+$' AND LENGTH(id::text) > 19`
-      );
-      if (invalidIds.rows.length > 0) {
-        logger.warn('Found invalid id values in registration.patient. Cleaning up...');
-        // Delete rows with invalid ids (or update them based on your needs)
-        await client.query(
-          `DELETE FROM registration.patient WHERE id::text ~ '^[0-9]+$' AND LENGTH(id::text) > 19`
-        );
-        logger.info('Invalid id values removed from registration.patient.');
-      }
-  
-      maxIdResult = await client.query(
-        `SELECT COALESCE(MAX(id), 0) as max_id FROM registration.patient`
-      );
-    } finally {
-      client.release();
-    }
-  
-    // Ensure currentId is a number
-    let currentId = Number(maxIdResult.rows[0].max_id);
-    if (isNaN(currentId)) {
-      logger.error('Failed to convert max_id to a number. Defaulting to 0.', { max_id: maxIdResult.rows[0].max_id });
-      currentId = 0;
-    }
-    logger.info('Starting currentId:', { currentId });
-  
     while (true) {
       const [patients] = await mysqlPool.query(
         `SELECT * FROM patient LIMIT ? OFFSET ?`,
@@ -389,20 +357,17 @@ class PatientService {
   
           const isDependent = familyMemberAttribute.length > 0 ? true : false;
   
-          // Increment the id for the current patient
-          currentId += 1;
-          logger.info('Inserting patient with id:', { currentId, type: typeof currentId });
-  
-          await client.query(
+          // Remove the id column from the INSERT statement to let PostgreSQL generate it
+          const result = await client.query(
             `
             INSERT INTO registration.patient (
-              id, patient_id, patient_identifier, created_at, updated_at, created_by, updated_by, status, reason_to_delete,
+              patient_id, patient_identifier, created_at, updated_at, created_by, updated_by, status, reason_to_delete,
               name, first_name, middle_name, last_name, dob, gender, is_dead, death_date, death_reason,
               identifications, patient_info, address, contact_info, relationship, organization_id, hospital_id, patient_type, nid, workplaces, verified, is_dependant, issue_date
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
+            RETURNING id
             `,
             [
-              currentId,
               patientData.patient_id,
               patientData.patient_identifier,
               patientData.created_at,
@@ -435,6 +400,9 @@ class PatientService {
               patientData.created_at
             ]
           );
+  
+          const insertedId = result.rows[0].id;
+          logger.info('Inserted patient with id:', { insertedId });
   
           totalMigrated++;
         }
